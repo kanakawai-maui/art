@@ -7,5 +7,5 @@ export declare class Scene {
     clock: THREE.Clock;
     controls: OrbitControls;
     constructor(id?: string);
-    update(unsafeArtPath?: string): void;
+    update(unsafeArtPath?: string, res?: number, range?: number): void;
 }
