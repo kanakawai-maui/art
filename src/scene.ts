@@ -13,6 +13,12 @@ export class Scene {
   controls: OrbitControls;
 
   constructor(id: string = "art") {
+    // Destroy past scene if it exists
+    const existingRenderer = document.querySelector(`#${id} canvas`);
+    if (existingRenderer) {
+      console.info("Destroying existing scene.");
+      existingRenderer.remove();
+    }
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(
       50,
@@ -41,6 +47,8 @@ export class Scene {
     // this.scene.add( axesHelper );
     //this.camera.position.z -= 30;
 
+    this.scene.background = new THREE.Color(0x001000); // Dark blue color
+
 
     const sunlight = new THREE.DirectionalLight(0xfffffb, 0.9);
     sunlight.position.set(200, 1000, 900);
@@ -62,8 +70,9 @@ export class Scene {
     spotLight.distance = 1500;
     spotLight.castShadow = true;
     this.scene.add(spotLight);
-
   }
+
+
 
   update(
     unsafeArtPath: string = DEFAULT_IMAGE_URL,
@@ -77,8 +86,6 @@ export class Scene {
     if(!unsafeArtPath.startsWith("http")) {
       throw new Error("Invalid URL: " + unsafeArtPath);
     }
-
-    
 
     const safeArtPath = unsafeArtPath.replace(/\\/g, "/");
 
@@ -164,14 +171,14 @@ export class Scene {
       console.log("Shapes added to the scene");
 
       // center the group
-      group.position.x = -4;
-      group.position.y = 6;
+      group.position.x = -7;
+      group.position.y = 4;
       group.position.z = 0;
 
       // set camera position
       camera.position.x = 4;
       camera.position.y = 4;
-      camera.position.z = -27;
+      camera.position.z = -13;
       const box = new THREE.Box3().setFromObject(group);
       const center = box.getCenter(new THREE.Vector3());
       // get right edge of the box
@@ -210,10 +217,8 @@ export class Scene {
             }
           }
         }
-        // set group pivot point to the leftmost side of the group x and middle y
 
-
-        group.rotateOnAxis(new THREE.Vector3(0, -1, 0), Math.sin(time) * 0.001);
+        group.rotateOnAxis(new THREE.Vector3(0, -10, 0), Math.sin(time/100) * 0.0005);
 
         this.controls.update(delta);
         renderer.render(scene, camera);
