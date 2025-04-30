@@ -1,5 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass";
+import { UltraHDRLoader } from "three/examples/jsm/loaders/UltraHDRLoader";
+import { FontLoader } from "three/examples/jsm/loaders/FontLoader";
+import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry";
 
 const DEFAULT_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Flag_of_the_United_States.svg/1600px-Flag_of_the_United_States.svg.png?20240524035322";
 const SPARK_PLUG_IMAGE_URL = "https://threejs.org/examples/textures/sprites/spark1.png";
@@ -41,24 +47,39 @@ export class Scene {
     // Initiate OrbitControls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
-    // An axis object to visualize the 3 axes in a simple way.
-    // sThe X axis is red. The Y axis is green. The Z axis is blue.
-    // const axesHelper = new THREE.AxesHelper( 5 );
-    // this.scene.add( axesHelper );
-    //this.camera.position.z -= 30;
+    const loadEnvironment = function ( resolution = '4k', type: 'HalfFloatType' | 'FloatType', scene: THREE.Scene ) {
 
-    this.scene.background = new THREE.Color(0x001000); // Dark blue color
+      loader.setDataType( THREE[type as 'HalfFloatType' | 'FloatType'] );
 
+      loader.load( `https://threejs.org/examples/textures/equirectangular/spruit_sunrise_${resolution}.hdr.jpg`, function ( texture ) {
+
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        texture.needsUpdate = true;
+
+        scene.background = texture;
+        scene.environment = texture;
+
+      } );
+    };
+
+    // Add light fog to the scene
+    const fogColor = new THREE.Color(0x000000); // Black color for fog
+    const fogDensity = 0.02; // Adjust density as needed
+    this.scene.fog = new THREE.FogExp2(fogColor, fogDensity);
+
+    const loader = new UltraHDRLoader();
+				loader.setDataType( THREE.FloatType );
+    loadEnvironment( '4k', 'HalfFloatType', this.scene );
 
     const sunlight = new THREE.DirectionalLight(0xfffffb, 0.9);
-    sunlight.position.set(200, 1000, 900);
+    sunlight.position.set(2000, 1000, 900);
     sunlight.castShadow = true;
 
     sunlight.shadow.mapSize.width = 1024;
     sunlight.shadow.mapSize.height = 1024;
     sunlight.shadow.camera.near = 10;
     sunlight.shadow.camera.far = 1000;
-    sunlight.intensity = 1;
+    sunlight.intensity = 0.5;
     sunlight.castShadow = true;
     this.scene.add(sunlight);
 
@@ -71,8 +92,6 @@ export class Scene {
     spotLight.castShadow = true;
     this.scene.add(spotLight);
   }
-
-
 
   update(
     unsafeArtPath: string = DEFAULT_IMAGE_URL,
@@ -138,10 +157,10 @@ export class Scene {
               size: 0.7, // Fixed size for better performance
               sizeAttenuation: true,
               transparent: true,
-              opacity: 0.85, // Fixed opacity to avoid recalculations
+              opacity: 0.99, // Fixed opacity to avoid recalculations
               depthWrite: true, // Disable depth writing for better performance
               map: new THREE.TextureLoader().load(SPARK_PLUG_IMAGE_URL), // Add a texture for particles
-              alphaTest: 0.5 // Improve performance by discarding fully transparent pixels
+              alphaTest: 0.4 // Improve performance by discarding fully transparent pixels
             });
 
             material.needsUpdate = true;
@@ -158,7 +177,7 @@ export class Scene {
       // flip the group
       group.scale.set(-1, 1, 1); // Flip the group horizontally
       // flip the group vertically
-      group.scale.set(1, -1, 1); // Flip the group vertically
+      group.scale.set(1.01, -1.01, 1); // Flip the group vertically
 
       // remove previous group from the scene
       const previousGroup = scene.getObjectByName("artGroup");
@@ -176,54 +195,93 @@ export class Scene {
       group.position.z = 0;
 
       // set camera position
-      camera.position.x = 4;
-      camera.position.y = 4;
-      camera.position.z = -13;
+      camera.position.x = -19;
+      camera.position.y = -2;
+      camera.position.z = -17;
       const box = new THREE.Box3().setFromObject(group);
       const center = box.getCenter(new THREE.Vector3());
-      // get right edge of the box
-      const rightEdge = box.max.x;
-
-
-      
 
       camera.lookAt(center);
 
-        
+      // Add postprocessing effects
+      const composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
 
-      const animate = () => {
-        requestAnimationFrame(animate);
-        const delta = this.clock.getDelta();
-        const time = performance.now() * 0.012;
+      // Add a bloom effect with optimized parameters
+      const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.07, // Reduced strength for better performance
+        0.6, // Adjusted radius for efficiency
+        0.5 // Slightly increased threshold to reduce overdraw
+      );
+      bloomPass.renderToScreen = true; // Avoid unnecessary passes
+      composer.addPass(bloomPass);
 
-        // loop over children by column, assume consecutive rows 
-        for (let x = 0; x < imageData.width; x++) {
-          for (let y = 0; y < imageData.height; y++) {
-            const i = y * imageData.width + x;
-            if (i < group.children.length) {
-              
-              const child = group.children[i];
-              const sine = Math.sin((1/2) * Math.PI * time + child.id);
-    
-              const scaleX = sine * 0.000001 + 0.01; // Dynamic scaling
-              const scaleY = sine * 0.000009 + 0.01; // Dynamic scaling
-              const scaleZ = sine * 0.0004 + 0.03; // Dynamic scaling
-    
-              child.scale.set(scaleX, scaleY, scaleZ);
-              
-              const sine2 = Math.sin((1/8) * ((Math.PI) * time + child.id));
-              
-              child.position.z += Math.PI/66 * range * -sine2;
-            }
-          }
+      const fontLoader = new FontLoader();
+      fontLoader.load('https://threejs.org/examples/fonts/gentilis_bold.typeface.json', (font) => {
+        const textGeometry = new TextGeometry('Good Morning', {
+          font: font,
+          size: 1.5,
+          depth: 0.2,
+          curveSegments: 12,
+          bevelEnabled: true,
+          bevelThickness: 0.03,
+          bevelSize: 0.02,
+          bevelSegments: 5,
+        });
+
+        const textMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+
+        // Position the text above the group
+        textMesh.position.set(-3, 6, 0); // Adjust position as needed
+        textMesh.name = "goodMorningText";
+
+        // Remove previous text if it exists
+        const previousText = scene.getObjectByName("goodMorningText");
+        if (previousText) {
+          scene.remove(previousText);
         }
 
-        group.rotateOnAxis(new THREE.Vector3(0, -10, 0), Math.sin(time/100) * 0.0005);
+        // Flip the text horizontally
+        textMesh.scale.x = -1;
+        textMesh.position.x -= -13;
 
-        this.controls.update(delta);
-        renderer.render(scene, camera);
+        scene.add(textMesh);
+    });
+
+
+      const render = () => {
+        setTimeout(() => {
+          requestAnimationFrame(render);
+          const delta = this.clock.getDelta();
+          const time = performance.now() * 0.125;
+
+          // Optimize by iterating directly over group.children
+          const children = group.children;
+          const len = children.length;
+          for (let i = 0; i < len; i++) {
+            const child = children[i];
+            const sine = Math.sin(0.5 * Math.PI * time + child.id);
+            const cosine = Math.cos(0.5 * Math.PI * time + child.id);
+
+            const scaleX = sine * 0.000005 + 0.01; // Dynamic scaling
+            const scaleY = sine * 0.000009 + 0.01; // Dynamic scaling
+            const scaleZ = cosine * 0.0004 + 0.03; // Dynamic scaling
+
+            child.scale.set(scaleX, scaleY, scaleZ);
+
+            const sine2 = Math.sin(0.125 * (Math.PI * time + child.id));
+
+            child.position.z += Math.PI / 66 * range * -sine2;
+          }
+
+          this.controls.update(delta);
+          renderer.render(scene, camera);
+          composer.render(delta);
+        }, 1000 / 60); // Limit to ~30 FPS
       };
-      animate();
+      render();
     });
   }
 }
